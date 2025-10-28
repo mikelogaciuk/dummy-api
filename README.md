@@ -40,6 +40,8 @@ This is a dummy API written in Ruby (Sinatra) for network testing and prototypin
    rake run
    ```
 
+It runs on port `4567` by default.
+
 ## 🚀 Testing
 
 There is a simple test suite included. To run the tests, use:
