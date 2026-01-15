@@ -8,7 +8,8 @@ WORKDIR /app
 
 COPY Gemfile Gemfile.lock ./
 RUN gem install bundler && \
-    bundle install --jobs 4 --retry 3 --without development test
+    bundle config set without 'development test' && \
+    bundle install --jobs 4 --retry 3
 
 COPY . ./
 
