@@ -1,31 +1,77 @@
 name: Build and Push Docker Image
 
 on:
-    push:
-        branches:
-            - main
-    schedule:
-        - cron: "0 0 * * 0" # Weekly on Sundays at midnight
+  push:
+    branches:
+      - main
+  pull_request:
+    branches: ["**"]
+  schedule:
+    - cron: "0 0 * * 0" # Weekly on Sundays at midnight
+
+env:
+  REGISTRY: docker.io
+  SHA: ${{ github.event.pull_request.head.sha || github.event.after }}
+  COMPARE_TAG: latest
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/dummy-api:latest
 
 jobs:
-    build-and-push:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-            - name: Log in to Docker Hub
-              uses: docker/login-action@v3
-              with:
-                  username: ${{ secrets.DOCKERHUB_USERNAME }}
-                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-            - name: Build and push Docker image
-              uses: docker/build-push-action@v5
-              with:
-                  context: .
-                  push: true
-                  tags: mikelogaciuk/dummy-api:latest
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        continue-on-error: true
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.SHA }}
+          tags: |
+            type=edge,branch=$repo.default_branch
+            type=semver,pattern=v{{version}}
+            type=sha,prefix=,suffix=,format=short
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/dummy-api:latest
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Docker Scout
+        id: docker-scout
+        uses: docker/scout-action@v1
+        continue-on-error: true
+        with:
+          command: cves,recommendations
+          image: ${{ steps.meta.outputs.tags }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save Docker Scout results
+        if: steps.docker-scout.outcome == 'success'
+        run: |
+          echo "${{ steps.docker-scout.outputs.results }}" > docker-scout-results.json
+
+      - name: Upload Docker Scout results
+        if: steps.docker-scout.outcome == 'success'
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-scout-results
+          path: docker-scout-results.json
+          retention-days: 7
