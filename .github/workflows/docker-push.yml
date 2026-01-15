@@ -70,7 +70,7 @@ jobs:
 
       - name: Upload Docker Scout results
         if: steps.docker-scout.outcome == 'success'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docker-scout-results
           path: docker-scout-results.json
